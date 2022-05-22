@@ -6,6 +6,16 @@ const { signToken } = require("../utils/auth");
 // Here, we pass in the parent as more of a placeholder parameter. It won't be used, but we need something in that first parameter's spot so we can access the username argument from the second parameter. We use a ternary operator to check if username exists. If it does, we set params to an object with a username key set to that value. If it doesn't, we simply return an empty object.
 const resolvers = {
   Query: {
+    me: async (parent, args, context) => {
+      if (context.user) {
+        const userData = await User.findOne({ _id: context.user._id })
+          .select("-__v -password")
+          .populate("thoughts")
+          .populate("friends");
+        return userData;
+      }
+      throw new AuthenticationError("Not logged in");
+    },
     // get all users
     users: async () => {
       return User.find()
@@ -28,6 +38,7 @@ const resolvers = {
       return Thought.findOne({ _id });
     },
   },
+
   Mutation: {
     addUser: async (parent, args) => {
       const user = await User.create(args);
@@ -50,6 +61,56 @@ const resolvers = {
 
       const token = signToken(user);
       return { token, user };
+    },
+    addThought: async (parent, args, context) => {
+      // Only logged-in users should be able to use this mutation, hence why we check for the existence of context.user first. Remember, the decoded JWT is only added to context if the verification passes. The token includes the user's username, email, and _id properties, which become properties of context.user and can be used in the follow-up Thought.create() and User.findByIdAndUpdate() methods.
+      if (context.user) {
+        const thought = await Thought.create({
+          ...args,
+          username: context.user.username,
+        });
+
+        await User.findByIdAndUpdate(
+          { _id: context.user._id },
+          { $push: { thoughts: thought._id } },
+          { new: true }
+        );
+
+        return thought;
+      }
+
+      throw new AuthenticationError("You need to be logged in!");
+    },
+    addReaction: async (parent, { thoughtId, reactionBody }, context) => {
+      if (context.user) {
+        const updatedThought = await Thought.findOneAndUpdate(
+          { _id: thoughtId },
+          {
+            $push: {
+              reactions: { reactionBody, username: context.user.username },
+            },
+          },
+          { new: true, runValidators: true }
+        );
+
+        return updatedThought;
+      }
+
+      throw new AuthenticationError("You need to be logged in!");
+    },
+    addFriend: async (parent, { friendId }, context) => {
+      if (context.user) {
+        // A user can't be friends with the same person twice, though, hence why we're using the $addToSet operator instead of $push to prevent duplicate entries.
+        const updatedUser = await User.findOneAndUpdate(
+          { _id: context.user._id },
+          { $addToSet: { friends: friendId } },
+          { new: true }
+        ).populate("friends");
+
+        return updatedUser;
+      }
+
+      throw new AuthenticationError("You need to be logged in!");
     },
   },
 };
