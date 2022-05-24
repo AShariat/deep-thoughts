@@ -10,7 +10,6 @@ const Home = () => {
   const { loading, data } = useQuery(QUERY_THOUGHTS);
   // ? This is called optional chaining, and it's new to JavaScript—so new that only browsers seem to support it. If we tried to use it in a Node server, we'd receive a syntax error, because Node doesn't know what it is yet. Optional chaining negates the need to check if an object even exists before accessing its properties. In this case, no data will exist until the query to the server is finished. So if we type data.thoughts, we'll receive an error saying we can't access the property of data—because it is undefined. What we're saying is, if data exists, store it in the thoughts constant we just created. If data is undefined, then save an empty array to the thoughts component.
   const thoughts = data?.thoughts || [];
-  console.log(thoughts);
 
   return (
     <main>
